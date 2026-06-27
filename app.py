@@ -8,7 +8,10 @@ from utils import (
     find_missing_skills,
     calculate_match_score,
     skill_match_score,
-    generate_suggestions
+    generate_suggestions,
+    experience_score,
+    extract_experience,
+    
 )
 
 st.set_page_config(
@@ -16,7 +19,7 @@ st.set_page_config(
     page_icon="📄",
     layout="wide"
 )
- 
+
 # Title
 st.markdown(
     """
@@ -55,13 +58,12 @@ jd = st.text_area(
 
 st.write("")
 
-
 # Analyze Button
 analyze = st.button("Analyze Resume")
 
 if analyze:
 
-    if uploaded_file is None:
+    if not uploaded_file:
         st.error("Please upload a resume.")
         st.stop()
 
@@ -74,6 +76,7 @@ if analyze:
     # JD Processing
     jd_clean = preprocess_text(jd)
     jd_skills = extract_skills(jd_clean)
+    jd_exp = extract_experience(jd_clean)
 
     for file in uploaded_file:
 
@@ -81,56 +84,57 @@ if analyze:
         resume_clean = preprocess_text(resume_text)
 
         resume_skills = extract_skills(resume_clean)
+        missing_skills = find_missing_skills(resume_skills,jd_skills)
 
-        missing_skills = find_missing_skills(
-            resume_skills,
-            jd_skills
-        )
+        skill_score = skill_match_score(resume_skills,jd_skills)
+        cosine_score = calculate_match_score(" ".join(resume_skills)," ".join(jd_skills))
+        
+        matched_skills = list(set(resume_skills) & set(jd_skills))
+        resume_exp = extract_experience(resume_text)
+        
+        exp_score = experience_score(resume_exp,jd_exp)
 
-        skill_score = skill_match_score(
-            resume_skills,
-            jd_skills
-        )
-
-        cosine_score = calculate_match_score(
-            " ".join(resume_skills),
-            " ".join(jd_skills)
-        )
-        matched_skills = list(
-            set(resume_skills) & set(jd_skills)
-        )
+        # debugging
+        # print(file.name)
+        # print("Resume Experience:", resume_exp)
+        # print("JD Experience:", jd_exp)
+        # print("Experience Score:", exp_score)
+        # print("----------------------")
 
         results.append({
             "Resume": file.name,
-            "ATS Match Score": skill_score,
+            "ATS Match Score": skill_score*0.7+0.3*exp_score,
             "Matched Skills": len(matched_skills),
             "Missing Skills": missing_skills,
 
             # Detailed data
             "Resume Skills": resume_skills,
             "JD Skills": jd_skills,
-            "Matched Skills List": matched_skills
+            "Matched Skills List": matched_skills,
+            "Experience": resume_exp,
+            "Experience Score": exp_score,
         })
-        
-    st.session_state["results"] = results
-        
-    df = pd.DataFrame(results)
 
+    # Store results AND the sorted DataFrame in session state
+    df = pd.DataFrame(results)
     df = df.sort_values(
         by="ATS Match Score",
         ascending=False
     ).reset_index(drop=True)
-    
-    display_df = df[
-        [
-            "Resume",
-            "ATS Match Score",
-            "Matched Skills"
-        ]
-    ]
 
-    df.index += 1
-    
+    st.session_state["results"] = results
+    st.session_state["display_df"] = df[["Resume", "ATS Match Score", "Matched Skills"]]
+    st.session_state["top_resume"] = df.iloc[0].to_dict()
+
+
+# ── Everything below runs on EVERY re-run, driven by session_state ──────────
+
+if "results" in st.session_state:
+
+    results   = st.session_state["results"]
+    display_df = st.session_state["display_df"]
+    top_resume = st.session_state["top_resume"]
+
     st.write("---")
 
     # Results Heading
@@ -138,25 +142,22 @@ if analyze:
         "<h2 style='color:orange;'>Results</h2>",
         unsafe_allow_html=True
     )
-    
+
     st.subheader("🏆 Resume Ranking")
     st.dataframe(display_df)
-    
-    top_resume = df.iloc[0]
+
     selected_resume = st.selectbox(
         "Select Resume for Detailed Analysis",
         display_df["Resume"]
     )
 
-    # Skill Match Score
-    
+    # Look up the selected resume's data
     selected_data = next(
         item for item in results
         if item["Resume"] == selected_resume
     )
-    st.write("Selected Resume:", selected_resume)
-    st.write("Selected ATS:", selected_data["ATS Match Score"])
-    st.write("Selected Missing:", selected_data["Missing Skills"])
+
+    # Skill Match Score
     st.markdown(
         f"""
         <h3 style='color:yellow;'>
@@ -166,9 +167,7 @@ if analyze:
         unsafe_allow_html=True
     )
 
-    st.progress(
-        selected_data["ATS Match Score"] / 100
-    )
+    st.progress(selected_data["ATS Match Score"] / 100)
 
     st.success(
         f"🏆 Best Match: {top_resume['Resume']} "
@@ -178,15 +177,18 @@ if analyze:
     # Eligibility Message
     if selected_data["ATS Match Score"] >= 80:
         st.success(
-            "🎉 Excellent Match! Your profile aligns very strongly with this role. You appear to be a highly competitive candidate. 🚀"
+            "🎉 Excellent Match! Your profile aligns very strongly with this role. "
+            "You appear to be a highly competitive candidate. 🚀"
         )
     elif selected_data["ATS Match Score"] >= 60:
         st.info(
-            "👍 Good Match! You meet many of the required skills. A few improvements could strengthen your profile further."
+            "👍 Good Match! You meet many of the required skills. "
+            "A few improvements could strengthen your profile further."
         )
     else:
         st.warning(
-            "📚 There are some important skill gaps. Consider improving the missing areas listed below."
+            "📚 There are some important skill gaps. "
+            "Consider improving the missing areas listed below."
         )
 
     st.write("---")
@@ -202,7 +204,3 @@ if analyze:
 
     st.subheader("🎯 JD Skills")
     st.write(selected_data["JD Skills"])
-    
-if "results" in st.session_state:
-    
-    results = st.session_state["results"]

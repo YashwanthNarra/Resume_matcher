@@ -1,3 +1,8 @@
+
+"""
+This part is for testing the functions whether they are giving the expected output.
+"""
+
 from utils import (
     extract_resume_text,
     preprocess_text,
@@ -5,7 +10,9 @@ from utils import (
     find_missing_skills,
     calculate_match_score,
     skill_match_score,
-    generate_suggestions
+    generate_suggestions,
+    extract_experience,
+    experience_score
 )
 
 jd = """
@@ -51,4 +58,23 @@ print("\nSuggestions:")
 
 for s in suggestions:
     print("-", s)
+    
+print(extract_experience("2-4 years experience")) 
+print(extract_experience("3 to 5 years")) 
+print(extract_experience("Minimum 2 years")) 
+print(extract_experience("At least 1 year")) 
+print(extract_experience("3+ years")) 
+print(extract_experience("5 years of experience")) 
+print(extract_experience("1.5 yrs")) 
+print(extract_experience("Freshers can apply")) 
+print(extract_experience("two years of experience")) 
+print(extract_experience("atleast four years of experience"))
+print(extract_experience("applicants can have at least two to four years of experience"))
+print(extract_experience("can have bw two to four years of experience"))
+print(experience_score((2,2), (1,3))) 
+print(experience_score((0,0), (1,3))) 
+print(experience_score((5,5), (1,3)))
+print(experience_score((4,4), (3,None))) 
+print(experience_score((2,2), (3,None)))  
+print(experience_score((5,5), (5,5)))      
 
